@@ -7,6 +7,7 @@ import sys
 import unicodedata
 
 CONDITION = re.compile(r"(?<!\w)(استوک|کارکرده|جعبه[-\s‌]*باز)(?!\w)")
+CASE_MODEL_PAIR = re.compile(r'(?<![\w/])(1[0-9]|20)\s*/\s*(1[0-9]|20)(?![\w/])')
 DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩يك", "01234567890123456789یک")
 
 
@@ -33,6 +34,13 @@ def review(request):
 
     if request.get("conflicting_evidence") is True:
         return decision("review", "عنوان‌ها، تصاویر یا کدهای ثبت‌شده با هم تعارض دارند.")
+
+    if request.get("category") == "phone_case":
+        for product in (left, right):
+            title = normalize(product.get("title"))
+            pair = CASE_MODEL_PAIR.search(title)
+            if "قاب" in title and pair and pair[1] != pair[2]:
+                return decision("reject", "عنوان قاب دو مدل گوشی را معرفی می‌کند.")
 
     for field, reason in {
         "brand": "برند تجاری محصولات متفاوت است.",

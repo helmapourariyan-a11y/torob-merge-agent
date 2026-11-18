@@ -1,0 +1,7 @@
+body { margin: 16px; width: 320px; font: 14px/1.6 system-ui, sans-serif; color: #202838; }
+h1 { font-size: 18px; margin: 0 0 12px; }
+form { display: grid; gap: 8px; }
+textarea, select, button { font: inherit; padding: 6px; }
+textarea { resize: vertical; }
+button { cursor: pointer; }
+#result { margin: 12px 0 0; }

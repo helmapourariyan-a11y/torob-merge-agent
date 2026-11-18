@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<title>دستیار بررسی ترب</title>
+<link rel="stylesheet" href="popup.css">
+<h1>بررسی ادغام</h1>
+<form id="review">
+  <label for="category">دستهٔ محصول</label>
+  <select id="category">
+    <option value="">انتخاب دسته</option>
+    <option value="phone_case">قاب و کاور گوشی</option>
+    <option value="headphones">هدفون و هندزفری</option>
+    <option value="cable">کابل</option>
+    <option value="smartwatch">ساعت و مچ‌بند هوشمند</option>
+  </select>
+  <label for="first">عنوان محصول اول</label>
+  <textarea id="first" required maxlength="500" rows="2"></textarea>
+  <label for="second">عنوان محصول دوم</label>
+  <textarea id="second" required maxlength="500" rows="2"></textarea>
+  <button type="button" id="capture">خواندن عنوان انتخاب‌شده در پنل</button>
+  <button id="submit">دریافت پیشنهاد</button>
+</form>
+<p id="result" role="status" aria-live="polite"></p>
+<script src="popup.js" defer></script>
+</html>
