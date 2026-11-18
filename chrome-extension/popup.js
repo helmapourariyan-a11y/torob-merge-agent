@@ -26,6 +26,31 @@ function saveDraft() {
 }
 form.addEventListener("input", saveDraft);
 
+document.querySelector("#read-request").addEventListener("click", async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = new URL(tab?.url);
+    if (url.origin !== "https://panel.torob.com" || !/^\/cs\/voting\/w(?:\/|$)/.test(url.pathname)) {
+      result.textContent = "صفحهٔ بررسی درخواست‌های ترب را باز کنید.";
+      return;
+    }
+    const [{ result: request }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["read-request.js"],
+    });
+    if (!request) {
+      result.textContent = "دو عنوان و وضعیت در انتظار بررسی پیدا نشد. عنوان‌ها را دستی وارد کنید.";
+      return;
+    }
+    [first.value, second.value] = request.titles;
+    category.value = request.category;
+    saveDraft();
+    form.requestSubmit(submit);
+  } catch {
+    result.textContent = "خواندن درخواست ممکن نشد. صفحهٔ پنل را دوباره باز کنید.";
+  }
+});
+
 document.querySelector("#capture").addEventListener("click", async () => {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
