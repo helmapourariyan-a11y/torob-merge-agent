@@ -40,7 +40,10 @@ def review(request):
             title = normalize(product.get("title"))
             pair = CASE_MODEL_PAIR.search(title)
             if "قاب" in title and pair and pair[1] != pair[2]:
-                return decision("reject", "عنوان قاب دو مدل گوشی را معرفی می‌کند.")
+                return decision(
+                    "reject", "عنوان قاب دو مدل گوشی را معرفی می‌کند.",
+                    reason_code="multiple_phone_models_in_title",
+                )
 
     for field, reason in {
         "brand": "برند تجاری محصولات متفاوت است.",

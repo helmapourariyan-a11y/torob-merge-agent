@@ -26,30 +26,118 @@ function saveDraft() {
 }
 form.addEventListener("input", saveDraft);
 
-document.querySelector("#read-request").addEventListener("click", async () => {
+const readButton = document.querySelector("#read-request");
+const autoButton = document.querySelector("#auto-vote");
+
+async function readOpenRequest() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const url = new URL(tab?.url);
+  if (url.origin !== "https://panel.torob.com" || !/^\/cs\/voting\/w(?:\/|$)/.test(url.pathname)) {
+    return null;
+  }
+  const [{ result: request, documentId }] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    files: ["read-request.js"],
+  });
+  if (!request) return null;
+  return { request, tabId: tab.id, documentId };
+}
+
+readButton.addEventListener("click", async () => {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const url = new URL(tab?.url);
-    if (url.origin !== "https://panel.torob.com" || !/^\/cs\/voting\/w(?:\/|$)/.test(url.pathname)) {
-      result.textContent = "صفحهٔ بررسی درخواست‌های ترب را باز کنید.";
+    const open = await readOpenRequest();
+    if (!open) {
+      result.textContent = "درخواست در انتظار بررسی پیدا نشد. عنوان‌ها را دستی وارد کنید.";
       return;
     }
-    const [{ result: request }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["read-request.js"],
-    });
-    if (!request) {
-      result.textContent = "دو عنوان و وضعیت در انتظار بررسی پیدا نشد. عنوان‌ها را دستی وارد کنید.";
-      return;
-    }
-    [first.value, second.value] = request.titles;
-    category.value = request.category;
+    [first.value, second.value] = open.request.titles;
+    category.value = open.request.category;
     saveDraft();
     form.requestSubmit(submit);
   } catch {
     result.textContent = "خواندن درخواست ممکن نشد. صفحهٔ پنل را دوباره باز کنید.";
   }
 });
+
+async function submitModelRejection(expected) {
+  const snapshot = () => globalThis.readTorobMergeRequest?.();
+  const signature = (request) => JSON.stringify([...request.titles].sort());
+  const current = snapshot();
+  if (!current || signature(current) !== signature(expected) ||
+      current.category !== expected.category || document.visibilityState !== "visible") {
+    return "changed";
+  }
+
+  const key = signature(current);
+  const attempted = globalThis.torobAttemptedVotes ??= new Set();
+  if (attempted.has(key)) return "duplicate";
+
+  const choices = [...document.querySelectorAll('button.btn-outline-danger[type="button"]')]
+    .filter((button) => {
+      const label = [...button.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent).join("").replace(/\s+/g, " ").trim();
+      return label === "عدم ذکر مدل در عنوان" && !button.disabled &&
+        button.getClientRects().length > 0 && getComputedStyle(button).visibility === "visible";
+    });
+  if (choices.length !== 1) return "unavailable";
+
+  attempted.add(key);
+  choices[0].click();
+  const deadline = Date.now() + 6000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const next = snapshot();
+    if (next && signature(next) !== key) return "advanced";
+  }
+  return "uncertain";
+}
+
+autoButton.addEventListener("click", async () => {
+  autoButton.disabled = true;
+  result.textContent = "در حال بررسی درخواست باز…";
+  try {
+    const open = await readOpenRequest();
+    if (!open?.documentId) {
+      result.textContent = "درخواست در انتظار بررسی پیدا نشد.";
+      return;
+    }
+    const verdict = await getVerdict(open.request.titles, open.request.category);
+    if (verdict.decision !== "reject" || verdict.reason_code !== "multiple_phone_models_in_title") {
+      result.textContent = "این درخواست به بررسی دستی نیاز دارد.";
+      return;
+    }
+    const [{ result: status }] = await chrome.scripting.executeScript({
+      target: { tabId: open.tabId, documentIds: [open.documentId] },
+      func: submitModelRejection,
+      args: [open.request],
+    });
+    result.textContent = {
+      advanced: "گزینهٔ رد ارسال شد و پنل به درخواست بعدی رفت.",
+      changed: "درخواست عوض شد. رأیی ارسال نشد.",
+      duplicate: "برای این عنوان‌ها قبلاً یک بار اقدام شده است. وضعیت را در پنل بررسی کنید.",
+      unavailable: "دکمهٔ مناسب پیدا نشد. رأیی ارسال نشد.",
+      uncertain: "دکمهٔ رد زده شد، اما درخواست بعدی دیده نشد. وضعیت را در پنل بررسی کنید.",
+    }[status];
+  } catch {
+    result.textContent = "نتیجهٔ عملیات مشخص نیست. وضعیت را در پنل بررسی کنید.";
+  } finally {
+    autoButton.disabled = false;
+  }
+});
+
+async function getVerdict(titles, productCategory) {
+  const response = await fetch("http://127.0.0.1:8765/review", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      kind: "merge", category: productCategory,
+      left: { title: titles[0] }, right: { title: titles[1] },
+    }),
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok) throw new Error("Local review failed");
+  return response.json();
+}
 
 document.querySelector("#capture").addEventListener("click", async () => {
   try {
@@ -85,17 +173,9 @@ form.addEventListener("submit", async (event) => {
   submit.disabled = true;
   result.textContent = "در حال بررسی…";
   try {
-    const response = await fetch("http://127.0.0.1:8765/review", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        kind: "merge", category: category.value,
-        left: { title: first.value.trim() }, right: { title: second.value.trim() },
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!response.ok) throw new Error("Local review failed");
-    const { decision, reason } = await response.json();
+    const { decision, reason } = await getVerdict(
+      [first.value.trim(), second.value.trim()], category.value,
+    );
     result.textContent = [labels[decision], reason].filter(Boolean).join(" — ");
   } catch {
     result.textContent = "پیشنهاد دریافت نشد. مطمئن شوید ایجنت محلی در حال اجراست.";

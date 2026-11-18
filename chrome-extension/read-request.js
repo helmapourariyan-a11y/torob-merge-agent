@@ -1,4 +1,4 @@
-(() => {
+globalThis.readTorobMergeRequest = () => {
   if (location.origin !== "https://panel.torob.com" || !/^\/cs\/voting\/w(?:\/|$)/.test(location.pathname)) {
     return null;
   }
@@ -21,4 +21,5 @@
     titles,
     category: titles.every((title) => /قاب|کاور/.test(title)) ? "phone_case" : "",
   };
-})();
+};
+globalThis.readTorobMergeRequest();
