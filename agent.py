@@ -8,6 +8,16 @@ import unicodedata
 
 CONDITION = re.compile(r"(?<!\w)(استوک|کارکرده|جعبه[-\s‌]*باز)(?!\w)")
 CASE_MODEL_PAIR = re.compile(r'(?<![\w/])(1[0-9]|20)\s*/\s*(1[0-9]|20)(?![\w/])')
+IPHONE_MODEL = re.compile(
+    r"(?<!\w)(?:iphone|آیفون|ایفون|آی فون|ای فون)\s*-?\s*"
+    r"(1[0-9]|20|[6-9]|xr|xs|x|se)(?!\w)"
+    r"(?:\s+(pro\s*max|پرو\s*مکس|pro|پرو|plus|پلاس|mini|مینی|max|مکس))?(?!\w)"
+)
+IPHONE_VARIANTS = {
+    "promax": "pro max", "پرو مکس": "pro max", "پرو‌مکس": "pro max",
+    "پرومکس": "pro max", "پرو": "pro", "پلاس": "plus", "مینی": "mini", "مکس": "max",
+}
+
 DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩يك", "01234567890123456789یک")
 
 
@@ -16,6 +26,22 @@ def normalize(value):
         return ""
     value = unicodedata.normalize("NFKC", value).translate(DIGITS).casefold()
     return " ".join(value.split())
+
+
+def distinct_iphone_model(title):
+    title = normalize(title).replace("‌", " ")
+    # Slash and range notation can introduce another model without repeating the brand.
+    if "/" in title or re.search(r"\d\s*(?:و|یا|تا|[-–])\s*\d", title):
+        return ""
+    models = set()
+    for family, variant in IPHONE_MODEL.findall(title):
+        models.add((family, IPHONE_VARIANTS.get(variant, variant)))
+    if len(models) != 1:
+        return ""
+    family, variant = models.pop()
+    if family == "se":
+        return ""  # An SE title alone can omit the generation.
+    return f"{family} {variant}".strip()
 
 
 def decision(action, reason, **details):
@@ -44,6 +70,14 @@ def review(request):
                     "reject", "عنوان قاب دو مدل گوشی را معرفی می‌کند.",
                     reason_code="multiple_phone_models_in_title",
                 )
+
+        first_model = distinct_iphone_model(left.get("title"))
+        second_model = distinct_iphone_model(right.get("title"))
+        if first_model and second_model and first_model != second_model:
+            return decision(
+                "reject", f"مدل گوشی در عنوان‌ها متفاوت است (iPhone {first_model} / iPhone {second_model}).",
+                reason_code="different_phone_models",
+            )
 
     for field, reason in {
         "brand": "برند تجاری محصولات متفاوت است.",

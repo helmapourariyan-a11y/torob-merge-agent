@@ -59,7 +59,7 @@ readButton.addEventListener("click", async () => {
   }
 });
 
-async function submitModelRejection(expected) {
+async function submitModelRejection(expected, labelToClick) {
   const snapshot = () => globalThis.readTorobMergeRequest?.();
   const signature = (request) => JSON.stringify([...request.titles].sort());
   const current = snapshot();
@@ -76,7 +76,7 @@ async function submitModelRejection(expected) {
     .filter((button) => {
       const label = [...button.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE)
         .map((node) => node.textContent).join("").replace(/\s+/g, " ").trim();
-      return label === "عدم ذکر مدل در عنوان" && !button.disabled &&
+      return label === labelToClick && !button.disabled &&
         button.getClientRects().length > 0 && getComputedStyle(button).visibility === "visible";
     });
   if (choices.length !== 1) return "unavailable";
@@ -102,14 +102,18 @@ autoButton.addEventListener("click", async () => {
       return;
     }
     const verdict = await getVerdict(open.request.titles, open.request.category);
-    if (verdict.decision !== "reject" || verdict.reason_code !== "multiple_phone_models_in_title") {
+    const labelToClick = new Map([
+      ["multiple_phone_models_in_title", "عدم ذکر مدل در عنوان"],
+      ["different_phone_models", "تفاوت در مدل"],
+    ]).get(verdict.reason_code);
+    if (verdict.decision !== "reject" || !labelToClick) {
       result.textContent = "این درخواست به بررسی دستی نیاز دارد.";
       return;
     }
     const [{ result: status }] = await chrome.scripting.executeScript({
       target: { tabId: open.tabId, documentIds: [open.documentId] },
       func: submitModelRejection,
-      args: [open.request],
+      args: [open.request, labelToClick],
     });
     result.textContent = {
       advanced: "گزینهٔ رد ارسال شد و پنل به درخواست بعدی رفت.",
