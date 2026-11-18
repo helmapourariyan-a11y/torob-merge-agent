@@ -129,15 +129,15 @@ autoButton.addEventListener("click", async () => {
   }
 });
 
-async function getVerdict(titles, productCategory) {
+async function getVerdict(titles, productCategory, useModel = false) {
   const response = await fetch("http://127.0.0.1:8765/review", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      kind: "merge", category: productCategory,
+      kind: "merge", category: productCategory, use_model: useModel,
       left: { title: titles[0] }, right: { title: titles[1] },
     }),
-    signal: AbortSignal.timeout(5000),
+    signal: AbortSignal.timeout(useModel ? 20000 : 5000),
   });
   if (!response.ok) throw new Error("Local review failed");
   return response.json();
@@ -177,10 +177,11 @@ form.addEventListener("submit", async (event) => {
   submit.disabled = true;
   result.textContent = "در حال بررسی…";
   try {
-    const { decision, reason } = await getVerdict(
+    const { decision, reason, source } = await getVerdict(
       [first.value.trim(), second.value.trim()], category.value,
+      document.querySelector("#use-model").checked,
     );
-    result.textContent = [labels[decision], reason].filter(Boolean).join(" — ");
+    result.textContent = [source === "openai" ? "پیشنهاد OpenAI" : "", labels[decision], reason].filter(Boolean).join(" — ");
   } catch {
     result.textContent = "پیشنهاد دریافت نشد. مطمئن شوید ایجنت محلی در حال اجراست.";
   } finally {

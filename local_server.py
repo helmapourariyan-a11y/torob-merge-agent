@@ -3,7 +3,7 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 
-from agent import review
+from model_review import with_model
 
 
 class ReviewHandler(BaseHTTPRequestHandler):
@@ -31,7 +31,7 @@ class ReviewHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Expected a JSON object up to 16 KiB")
             return
 
-        payload = json.dumps(review(request), ensure_ascii=False).encode()
+        payload = json.dumps(with_model(request), ensure_ascii=False).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
